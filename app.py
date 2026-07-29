@@ -121,7 +121,7 @@ def get_leaderboard():
 @app.route('/save_match', methods=['POST'])
 @jwt_required(optional=True)
 def save_match():
-    data = request.get_json()
+    data = request.get_json() or {}
     winner_name = data.get('winner')
     
     current_identity = get_jwt_identity()
@@ -132,9 +132,9 @@ def save_match():
             db.session.commit()
 
     new_match = MatchHistory(
-        size=data.get('size'),
-        players=data.get('players'),
-        winner=winner_name,
+        size=data.get('size', 3),
+        players=data.get('players', 2),
+        winner=winner_name or "Draw",
         move_log=json.dumps(data.get('move_log', []))
     )
     db.session.add(new_match)
@@ -143,8 +143,8 @@ def save_match():
 
 @app.route('/ai_move', methods=['POST'])
 def ai_move():
-    data = request.get_json()
-    board = data.get('board')
+    data = request.get_json() or {}
+    board = data.get('board', [])
     empty_indices = [i for i, val in enumerate(board) if val == ' ' or val == '']
     if not empty_indices:
         return jsonify({"move": -1})
@@ -180,7 +180,7 @@ def handle_join_room(data):
         room_data["participants"].append(username)
         
     emit('room_notification', {"message": f"{username} joined room {room}."}, to=room)
-    emit('sync_state', room_data)
+    emit('sync_state', room_data, to=room)
 
 @socketio.on('make_move')
 def handle_make_move(data):
@@ -188,7 +188,7 @@ def handle_make_move(data):
     if room in ACTIVE_ROOMS:
         ACTIVE_ROOMS[room]["board"] = data.get('board')
         ACTIVE_ROOMS[room]["turn"] = data.get('turnIndex')
-        emit('receive_move', data, to=room, include_self=False)
+    emit('receive_move', data, to=room, include_self=False)
 
 @socketio.on('chat_message')
 def handle_chat(data):

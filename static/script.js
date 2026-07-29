@@ -174,6 +174,7 @@ createRoomBtn.addEventListener('click', () => {
     socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
     roomDisplay.innerText = `Room Created! Code: ${roomCode}`;
     roomDisplay.classList.remove('hidden');
+    startOnlineMatch();
 });
 
 joinRoomBtn.addEventListener('click', () => {
@@ -183,6 +184,7 @@ joinRoomBtn.addEventListener('click', () => {
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
         roomDisplay.innerText = `Joined Arena: ${roomCode}`;
         roomDisplay.classList.remove('hidden');
+        startOnlineMatch();
     } else { alert("Enter room code."); }
 });
 
@@ -193,11 +195,39 @@ spectateBtn.addEventListener('click', () => {
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: true });
         roomDisplay.innerText = `Spectating Room: ${roomCode}`;
         roomDisplay.classList.remove('hidden');
+        startOnlineMatch();
     } else { alert("Enter room code to spectate."); }
 });
 
+function startOnlineMatch() {
+    BOARD_SIZE = 3; WIN = 3; playerCount = 2;
+    switchWindow(winGame);
+    boardElement.style.setProperty('--grid-size', BOARD_SIZE);
+    boardElement.innerHTML = '';
+    
+    board = Array(BOARD_SIZE * BOARD_SIZE).fill(' ');
+    currentPlayerIndex = 0; gameActive = true; gamePaused = false; moveHistoryLog = []; heatmapActive = false;
+    
+    renderParticipantsSidebar();
+    statusMessage.innerText = `Online Match Live! Player 1 (X) turn.`;
+    updateWinProbability();
+
+    for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.index = i;
+        cell.addEventListener('click', () => handleCellClick(i, cell));
+        boardElement.appendChild(cell);
+    }
+    startTimer();
+}
+
 startMatchBtn.addEventListener('click', () => {
     gameMode = gameModeSelect.value;
+    if (gameMode === 'online') {
+        alert("Please use 'Create Room' or 'Join' for online multiplayer mode.");
+        return;
+    }
     playerCount = parseInt(playerCountSelect.value);
     if (gameMode === 'ai') { playerCount = 2; BOARD_SIZE = 3; WIN = 3; }
     else if (playerCount === 2) { BOARD_SIZE = 3; WIN = 3; }
@@ -505,7 +535,6 @@ async function processAIMove() {
 }
 
 socket.on('room_notification', (data) => {
-    statusMessage.innerText = data.message;
     const div = document.createElement('div');
     div.innerHTML = `<span style="color: #fca311;">SYSTEM:</span> ${data.message}`;
     chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
@@ -514,7 +543,7 @@ socket.on('room_notification', (data) => {
 socket.on('sync_state', (state) => {
     if (state && state.board) {
         board = state.board;
-        currentPlayerIndex = state.turn || 0;
+        currentPlayerIndex = state.turn !== undefined ? state.turn : 0;
         BOARD_SIZE = state.size || 3;
         playerCount = state.players || 2;
         gameActive = true; gamePaused = false;
@@ -538,17 +567,27 @@ socket.on('sync_state', (state) => {
 });
 
 socket.on('receive_move', (data) => {
-    const cell = document.querySelector(`.cell[data-index='${data.index}']`);
-    if (cell && board[data.index] === ' ') {
+    if (data && data.board) {
         board = data.board;
-        currentPlayerIndex = data.turnIndex;
-        cell.innerText = data.symbol;
-        cell.classList.add('taken');
-        playSound('move');
+        currentPlayerIndex = data.turnIndex !== undefined ? data.turnIndex : 0;
         
-        const colors = ['#00e5ff', '#ff0055', '#00ff00', '#ffaa00', '#aa00ff', '#ff00ff'];
-        cell.style.color = colors[symbols.indexOf(data.symbol) % colors.length];
-
+        boardElement.innerHTML = '';
+        boardElement.style.setProperty('--grid-size', BOARD_SIZE);
+        for (let i = 0; i < (BOARD_SIZE * BOARD_SIZE); i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            cell.dataset.index = i;
+            cell.innerText = board[i] || ' ';
+            if (board[i] && board[i] !== ' ') {
+                cell.classList.add('taken');
+                const colors = ['#00e5ff', '#ff0055', '#00ff00', '#ffaa00', '#aa00ff', '#ff00ff'];
+                cell.style.color = colors[symbols.indexOf(board[i]) % colors.length];
+            }
+            cell.addEventListener('click', () => handleCellClick(i, cell));
+            boardElement.appendChild(cell);
+        }
+        
+        playSound('move');
         updateWinProbability();
 
         if (check_win(data.symbol)) {
@@ -558,7 +597,6 @@ socket.on('receive_move', (data) => {
             return;
         }
 
-        currentPlayerIndex = (currentPlayerIndex + 1) % playerCount;
         statusMessage.innerText = `Player ${currentPlayerIndex + 1} turn.`;
         startTimer();
     }

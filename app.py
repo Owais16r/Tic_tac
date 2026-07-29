@@ -23,7 +23,11 @@ migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*", message_queue=None)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading"
+)
 
 limiter = Limiter(
     get_remote_address,

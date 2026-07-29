@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -9,6 +10,17 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_socketio import SocketIO, join_room, emit
+from dotenv import load_dotenv
+
+# Load environment variables from .env if present
+load_dotenv()
+
+# Configure production-grade structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -49,6 +61,7 @@ class MatchHistory(db.Model):
 
 with app.app_context():
     db.create_all()
+    logger.info("Database tables verified and initialized successfully.")
 
 @app.route('/')
 def index():
@@ -62,6 +75,7 @@ def register():
     password = data.get('password', '').strip()
 
     if not username or not password:
+        logger.warning("Registration failed: Empty credentials provided.")
         return jsonify({"success": False, "message": "Username and password cannot be empty."}), 400
     if len(username) < 3:
         return jsonify({"success": False, "message": "Username must be at least 3 characters long."}), 400
@@ -69,12 +83,14 @@ def register():
         return jsonify({"success": False, "message": "Password must be at least 6 characters long."}), 400
     
     if User.query.filter_by(username=username).first():
+        logger.warning(f"Registration failed: Username '{username}' already exists.")
         return jsonify({"success": False, "message": "Username already exists."}), 400
 
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
     new_user = User(username=username, password_hash=hashed_password, elo=1200)
     db.session.add(new_user)
     db.session.commit()
+    logger.info(f"New user registered successfully: '{username}'")
     return jsonify({"success": True, "message": "User registered successfully"})
 
 @app.route('/login', methods=['POST'])
@@ -90,7 +106,10 @@ def login():
     user = User.query.filter_by(username=username).first()
     if user and bcrypt.check_password_hash(user.password_hash, password):
         access_token = create_access_token(identity=username)
+        logger.info(f"User logged in successfully: '{username}'")
         return jsonify({"success": True, "access_token": access_token})
+    
+    logger.warning(f"Failed login attempt for username: '{username}'")
     return jsonify({"success": False, "message": "Invalid username or password."}), 401
 
 @app.route('/history', methods=['GET'])
@@ -100,7 +119,6 @@ def get_history():
     if not current_identity:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     
-    # Fetch the last 5 overall recorded match logs so replays show up instantly
     matches = MatchHistory.query.order_by(MatchHistory.id.desc()).limit(5).all()
     
     results = [{
@@ -132,6 +150,7 @@ def save_match():
         if user:
             user.elo += 15
             db.session.commit()
+            logger.info(f"Updated ELO (+15) for user '{current_identity}'. New ELO: {user.elo}")
 
     new_match = MatchHistory(
         size=data.get('size', 3),
@@ -141,12 +160,13 @@ def save_match():
     )
     db.session.add(new_match)
     db.session.commit()
+    logger.info(f"Match record saved successfully. Winner: {winner_name}")
     return jsonify({"success": True})
 
 @app.route('/ai_move', methods=['POST'])
 def ai_move():
-    data = request.get_json()
-    board = data.get('board')
+    data = request.get_json() or {}
+    board = data.get('board', [])
     empty_indices = [i for i, val in enumerate(board) if val == ' ' or val == '']
     if not empty_indices:
         return jsonify({"move": -1})
@@ -181,6 +201,7 @@ def handle_join_room(data):
     if not spectator and username not in room_data["participants"]:
         room_data["participants"].append(username)
         
+    logger.info(f"User '{username}' joined room '{room}' (Spectator: {spectator})")
     emit('room_notification', {"message": f"{username} joined room {room}."}, to=room)
     emit('sync_state', room_data)
 
@@ -196,7 +217,6 @@ def handle_make_move(data):
 def handle_chat(data):
     room = data.get('room')
     emit('receive_chat', data, to=room, broadcast=True)
-
 
 import os
 

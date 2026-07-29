@@ -44,7 +44,7 @@ class MatchHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     size = db.Column(db.Integer, nullable=False)
     players = db.Column(db.Integer, nullable=False)
-    winner = db.Column(db.String(20), nullable=False)
+    winner = db.Column(db.String(50), nullable=False)
     move_log = db.Column(db.Text, nullable=True)
 
 with app.app_context():
@@ -100,6 +100,7 @@ def get_history():
     if not current_identity:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     
+    # Fetch the last 5 overall recorded match logs so replays show up instantly
     matches = MatchHistory.query.order_by(MatchHistory.id.desc()).limit(5).all()
     
     results = [{
@@ -122,7 +123,8 @@ def get_leaderboard():
 @jwt_required(optional=True)
 def save_match():
     data = request.get_json() or {}
-    winner_name = data.get('winner')
+    winner_name = data.get('winner', 'Unknown')
+    move_log = data.get('move_log', [])
     
     current_identity = get_jwt_identity()
     if current_identity and winner_name and current_identity in winner_name:
@@ -134,8 +136,8 @@ def save_match():
     new_match = MatchHistory(
         size=data.get('size', 3),
         players=data.get('players', 2),
-        winner=winner_name or "Draw",
-        move_log=json.dumps(data.get('move_log', []))
+        winner=winner_name,
+        move_log=json.dumps(move_log)
     )
     db.session.add(new_match)
     db.session.commit()
@@ -143,8 +145,8 @@ def save_match():
 
 @app.route('/ai_move', methods=['POST'])
 def ai_move():
-    data = request.get_json() or {}
-    board = data.get('board', [])
+    data = request.get_json()
+    board = data.get('board')
     empty_indices = [i for i, val in enumerate(board) if val == ' ' or val == '']
     if not empty_indices:
         return jsonify({"move": -1})
@@ -180,7 +182,7 @@ def handle_join_room(data):
         room_data["participants"].append(username)
         
     emit('room_notification', {"message": f"{username} joined room {room}."}, to=room)
-    emit('sync_state', room_data, to=room)
+    emit('sync_state', room_data)
 
 @socketio.on('make_move')
 def handle_make_move(data):
@@ -193,7 +195,7 @@ def handle_make_move(data):
 @socketio.on('chat_message')
 def handle_chat(data):
     room = data.get('room')
-    emit('receive_chat', data, to=room)
+    emit('receive_chat', data, to=room, broadcast=True)
 
 
 import os

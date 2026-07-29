@@ -1,5 +1,5 @@
-const BACKEND_URL = 'http://127.0.0.1:5000';
-const socket = io(BACKEND_URL);
+const BACKEND_URL = window.location.origin;
+const socket = io();
 
 const symbols = ["X", "O", "△", "□", "★", "♥"];
 let board = [];

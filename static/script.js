@@ -17,6 +17,7 @@ let isSpectator = false;
 let moveHistoryLog = [];
 let soundEnabled = true;
 let heatmapActive = false;
+let myPlayerIndex = 0;
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -169,7 +170,7 @@ registerBtn.addEventListener('click', () => handleAuth('register'));
 
 createRoomBtn.addEventListener('click', () => {
     roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-    gameMode = 'online'; isSpectator = false;
+    gameMode = 'online'; isSpectator = false; myPlayerIndex = 0;
     socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
     roomDisplay.innerText = `Room Created! Code: ${roomCode}`;
     roomDisplay.classList.remove('hidden');
@@ -178,7 +179,7 @@ createRoomBtn.addEventListener('click', () => {
 joinRoomBtn.addEventListener('click', () => {
     const code = roomCodeInput.value.trim().toUpperCase();
     if (code) {
-        roomCode = code; gameMode = 'online'; isSpectator = false;
+        roomCode = code; gameMode = 'online'; isSpectator = false; myPlayerIndex = 1;
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
         roomDisplay.innerText = `Joined Arena: ${roomCode}`;
         roomDisplay.classList.remove('hidden');
@@ -188,7 +189,7 @@ joinRoomBtn.addEventListener('click', () => {
 spectateBtn.addEventListener('click', () => {
     const code = roomCodeInput.value.trim().toUpperCase();
     if (code) {
-        roomCode = code; gameMode = 'online'; isSpectator = true;
+        roomCode = code; gameMode = 'online'; isSpectator = true; myPlayerIndex = -1;
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: true });
         roomDisplay.innerText = `Spectating Room: ${roomCode}`;
         roomDisplay.classList.remove('hidden');
@@ -285,6 +286,11 @@ function handleTimeOut() {
 
 async function handleCellClick(index, cellElement) {
     if (!gameActive || gamePaused || board[index] !== ' ' || isSpectator) return;
+    
+    if (gameMode === 'online' && currentPlayerIndex !== myPlayerIndex) {
+        statusMessage.innerText = "Not your turn!";
+        return;
+    }
     if (gameMode === 'ai' && currentPlayerIndex !== 0) return;
 
     const players = symbols.slice(0, playerCount);
@@ -506,7 +512,7 @@ socket.on('room_notification', (data) => {
 });
 
 socket.on('sync_state', (state) => {
-    if (state && state.board && state.board.length > 0) {
+    if (state && state.board) {
         board = state.board;
         currentPlayerIndex = state.turn || 0;
         BOARD_SIZE = state.size || 3;
@@ -517,23 +523,45 @@ socket.on('sync_state', (state) => {
         boardElement.style.setProperty('--grid-size', BOARD_SIZE);
         boardElement.innerHTML = '';
         
-        for (let i = 0; i < board.length; i++) {
+        for (let i = 0; i < (BOARD_SIZE * BOARD_SIZE); i++) {
             const cell = document.createElement('div');
             cell.classList.add('cell');
             cell.dataset.index = i;
-            cell.innerText = board[i];
-            if (board[i] !== ' ') cell.classList.add('taken');
+            cell.innerText = board[i] || ' ';
+            if (board[i] && board[i] !== ' ') cell.classList.add('taken');
             cell.addEventListener('click', () => handleCellClick(i, cell));
             boardElement.appendChild(cell);
         }
-        statusMessage.innerText = `State Synced! Player turn active.`;
+        statusMessage.innerText = `State Synced! Player ${currentPlayerIndex + 1} turn.`;
         startTimer();
     }
 });
 
 socket.on('receive_move', (data) => {
     const cell = document.querySelector(`.cell[data-index='${data.index}']`);
-    if (cell) makeMoveLocally(data.index, data.symbol, cell);
+    if (cell && board[data.index] === ' ') {
+        board = data.board;
+        currentPlayerIndex = data.turnIndex;
+        cell.innerText = data.symbol;
+        cell.classList.add('taken');
+        playSound('move');
+        
+        const colors = ['#00e5ff', '#ff0055', '#00ff00', '#ffaa00', '#aa00ff', '#ff00ff'];
+        cell.style.color = colors[symbols.indexOf(data.symbol) % colors.length];
+
+        updateWinProbability();
+
+        if (check_win(data.symbol)) {
+            clearInterval(turnTimer); timerDisplay.classList.add('hidden');
+            statusMessage.innerText = `Player (${data.symbol}) Wins!`;
+            gameActive = false; playSound('win');
+            return;
+        }
+
+        currentPlayerIndex = (currentPlayerIndex + 1) % playerCount;
+        statusMessage.innerText = `Player ${currentPlayerIndex + 1} turn.`;
+        startTimer();
+    }
 });
 
 socket.on('receive_chat', (data) => {

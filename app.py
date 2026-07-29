@@ -23,11 +23,7 @@ migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode="threading"
-)
+socketio = SocketIO(app, cors_allowed_origins="*", message_queue=None)
 
 limiter = Limiter(
     get_remote_address,
@@ -104,7 +100,6 @@ def get_history():
     if not current_identity:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     
-    # Returns the last 5 overall match replays for immediate viewing
     matches = MatchHistory.query.order_by(MatchHistory.id.desc()).limit(5).all()
     
     results = [{
@@ -168,13 +163,24 @@ def get_heatmap():
 def handle_join_room(data):
     room = data.get('room')
     username = data.get('username', 'Guest')
+    spectator = data.get('spectator', False)
     
     join_room(room)
     if room not in ACTIVE_ROOMS:
-        ACTIVE_ROOMS[room] = {"board": [], "turn": 0, "size": 3, "players": 2}
+        ACTIVE_ROOMS[room] = {
+            "board": [' '] * 9, 
+            "turn": 0, 
+            "size": 3, 
+            "players": 2,
+            "participants": []
+        }
+    
+    room_data = ACTIVE_ROOMS[room]
+    if not spectator and username not in room_data["participants"]:
+        room_data["participants"].append(username)
         
     emit('room_notification', {"message": f"{username} joined room {room}."}, to=room)
-    emit('sync_state', ACTIVE_ROOMS[room])
+    emit('sync_state', room_data)
 
 @socketio.on('make_move')
 def handle_make_move(data):
@@ -182,12 +188,13 @@ def handle_make_move(data):
     if room in ACTIVE_ROOMS:
         ACTIVE_ROOMS[room]["board"] = data.get('board')
         ACTIVE_ROOMS[room]["turn"] = data.get('turnIndex')
-    emit('receive_move', data, to=room, include_self=False)
+        emit('receive_move', data, to=room, include_self=False)
 
 @socketio.on('chat_message')
 def handle_chat(data):
     room = data.get('room')
     emit('receive_chat', data, to=room)
+
 
 import os
 

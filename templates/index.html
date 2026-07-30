@@ -3,40 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Tic-Tac-Toe: Advanced Engine</title>
+    <title>Tic-Tac-Toe Advanced Strategy Engine</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
 
-    <!-- WINDOW 1: LOGIN / SIGNUP -->
+    <!-- WINDOW 1: LOGIN / REGISTER -->
     <div id="window-auth" class="window-screen">
         <div class="glass-panel auth-box">
-            <h2><i class="fas fa-terminal"></i> Terminal Access</h2>
-            <p style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;">Username (≥ 3 chars) & Password (≥ 6 chars)</p>
-            <input type="text" id="auth-username" placeholder="Username" class="glass-input" style="margin-bottom: 10px;">
-            <input type="password" id="auth-password" placeholder="Password" class="glass-input" style="margin-bottom: 15px;">
-            <div class="controls">
-                <button id="login-btn" class="btn-primary">Login</button>
-                <button id="register-btn" class="btn-secondary">Register</button>
+            <h2><i class="fas fa-gamepad" style="color: #0284c7;"></i> Tic-Tac-Toe Arena</h2>
+            <p id="auth-instruction" style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">Register first, then login with your credentials</p>
+            
+            <input type="text" id="auth-username" placeholder="Username (≥ 3 characters)" class="glass-input" style="margin-bottom: 10px;">
+            <input type="password" id="auth-password" placeholder="Password (≥ 6 characters)" class="glass-input" style="margin-bottom: 15px;">
+            
+            <div class="controls" style="display: flex; gap: 10px;">
+                <button id="register-btn" class="btn-secondary" style="flex: 1;">Register</button>
+                <button id="login-btn" class="btn-primary" style="flex: 1;">Login</button>
             </div>
-            <p id="auth-status" style="margin-top: 10px; font-size: 0.85rem;"></p>
+            <p id="auth-status" style="margin-top: 12px; font-size: 0.85rem; font-weight: 500;"></p>
         </div>
     </div>
 
-    <!-- WINDOW 2: PROFILE & MATCH ARRANGEMENT SETUP -->
+    <!-- WINDOW 2: SETUP & DASHBOARD -->
     <div id="window-setup" class="window-screen hidden">
         <div class="glass-panel setup-container">
             <div class="setup-header">
                 <div>
-                    <i class="fas fa-user-ninja fa-2x"></i>
-                    <h2 id="display-username" style="display:inline; margin-left: 10px;">Player One</h2>
+                    <i class="fas fa-user-circle fa-2x" style="color: #0284c7;"></i>
+                    <h2 id="display-username" style="display:inline; margin-left: 10px; color: #1e293b;">Player One</h2>
                 </div>
-                <button id="sound-toggle-btn" class="btn-secondary" style="padding: 5px 10px; font-size: 0.8rem;"><i class="fas fa-volume-up"></i> SFX: ON</button>
+                <button id="sound-toggle-btn" class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;"><i class="fas fa-volume-up"></i> SFX: ON</button>
             </div>
 
             <div class="setup-grid">
-                <div class="glass-panel" style="background: rgba(0,0,0,0.2);">
+                <div class="glass-panel card-inner">
                     <h3><i class="fas fa-cogs"></i> Match Settings & Setup</h3>
                     
                     <label>Game Mode</label>
@@ -60,7 +62,7 @@
                         <select id="win-length-select" class="glass-select"></select>
                     </div>
 
-                    <div id="rules-box" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 6px; font-size: 0.75rem; color: #a0aec0; margin: 10px 0; line-height: 1.3;">
+                    <div id="rules-box" style="background: rgba(2, 132, 199, 0.05); border: 1px solid rgba(2, 132, 199, 0.15); padding: 8px; border-radius: 6px; font-size: 0.75rem; color: #475569; margin: 10px 0; line-height: 1.3;">
                         <strong>Rules to Win:</strong> Align 3 consecutive symbols horizontally, vertically, or diagonally on a 3x3 grid.
                     </div>
 
@@ -75,20 +77,20 @@
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 15px;">
-                    <div class="glass-panel" style="background: rgba(0,0,0,0.2);">
+                    <div class="glass-panel card-inner">
                         <h3><i class="fas fa-globe"></i> Online Match Rooms</h3>
                         <button id="create-room-btn" class="btn-primary" style="margin-bottom: 8px; width: 100%;"><i class="fas fa-plus-circle"></i> Create Room</button>
                         <input type="text" id="room-code" class="glass-input" placeholder="Enter Room Code..." style="margin-bottom: 8px;">
                         <div style="display: flex; gap: 8px;">
                             <button id="join-btn" class="btn-secondary" style="flex:1;"><i class="fas fa-sign-in-alt"></i> Join</button>
-                            <button id="spectate-btn" class="btn-secondary" style="flex:1; border: 1px solid #00e5ff; color: #00e5ff;"><i class="fas fa-eye"></i> Spectate</button>
+                            <button id="spectate-btn" class="btn-secondary" style="flex:1; border: 1px solid #0284c7; color: #0284c7;"><i class="fas fa-eye"></i> Spectate</button>
                         </div>
-                        <p id="room-display" class="hidden" style="margin-top: 8px; color: #00e5ff; font-weight: bold; text-align: center; font-size: 0.8rem;"></p>
+                        <p id="room-display" class="hidden" style="margin-top: 8px; color: #0284c7; font-weight: bold; text-align: center; font-size: 0.8rem;"></p>
                     </div>
 
-                    <div class="glass-panel" style="background: rgba(0,0,0,0.2); flex-grow: 1;">
+                    <div class="glass-panel card-inner" style="flex-grow: 1;">
                         <h3><i class="fas fa-history"></i> My Last 5 Match Replays</h3>
-                        <ul id="match-history-list" style="list-style: none; font-size: 0.8rem; max-height: 120px; overflow-y: auto;"></ul>
+                        <ul id="match-history-list" style="list-style: none; font-size: 0.8rem; max-height: 120px; overflow-y: auto; margin-top: 6px;"></ul>
                     </div>
                 </div>
             </div>
@@ -99,18 +101,18 @@
     <div id="window-game" class="window-screen hidden">
         <div class="game-arena-container glass-panel">
             <div class="game-top-bar">
-                <h2 style="font-size: 1.2rem;" class="glow-text">Active Match Arena</h2>
+                <h2 style="font-size: 1.2rem; color: #1e293b;">Active Match Arena</h2>
                 <div style="display: flex; gap: 10px;">
-                    <button id="pause-resume-btn" class="btn-secondary" style="border: 1px solid #fca311; color: #fca311;"><i class="fas fa-pause"></i> Pause Game</button>
-                    <button id="end-match-btn" class="btn-secondary" style="border: 1px solid #ff0055; color: #ff0055;"><i class="fas fa-stop-circle"></i> End Game</button>
+                    <button id="pause-resume-btn" class="btn-secondary" style="border: 1px solid #d97706; color: #d97706;"><i class="fas fa-pause"></i> Pause Game</button>
+                    <button id="end-match-btn" class="btn-secondary" style="border: 1px solid #e11d48; color: #e11d48;"><i class="fas fa-stop-circle"></i> End Game</button>
                 </div>
             </div>
 
             <div class="game-main-layout">
-                <div class="glass-panel profile-sidebar">
+                <div class="glass-panel card-inner profile-sidebar">
                     <h3><i class="fas fa-users"></i> Match Participants</h3>
                     <div id="participants-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; font-size: 0.85rem;"></div>
-                    <div id="timer-display" class="hidden" style="margin-top: 20px; font-size: 1.1rem; font-weight: bold; color: #fca311; background: rgba(0,0,0,0.5); padding: 6px; border-radius: 6px; text-align: center;">
+                    <div id="timer-display" class="hidden" style="margin-top: 20px; font-size: 1.1rem; font-weight: bold; color: #d97706; background: rgba(217, 119, 6, 0.08); padding: 8px; border-radius: 6px; text-align: center; border: 1px solid rgba(217, 119, 6, 0.2);">
                         Turn Time: <span id="time-remaining">10</span>s
                     </div>
                 </div>
@@ -120,12 +122,12 @@
                     <div id="status-message">Match in progress...</div>
                 </div>
 
-                <div class="glass-panel right-sidebar">
+                <div class="glass-panel card-inner right-sidebar">
                     <h3><i class="fas fa-brain"></i> AI Coach & Tools</h3>
                     <div class="probability-section" style="margin: 10px 0;">
-                        <small>WIN PROBABILITY</small>
+                        <small style="color: #64748b;">WIN PROBABILITY</small>
                         <div class="progress-bar-bg"><div id="ai-prob-bar" class="progress-bar-fill"></div></div>
-                        <div class="prob-labels"><span id="prob-text">50%</span></div>
+                        <div class="prob-labels"><span id="prob-text" style="color: #475569;">50%</span></div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
                         <button id="heatmap-btn" class="btn-secondary"><i class="fas fa-map"></i> Toggle Heatmap</button>
@@ -146,8 +148,8 @@
     <!-- WINDOW 4: POST-MATCH LEADERBOARD MODAL -->
     <div id="window-leaderboard" class="window-screen hidden">
         <div class="glass-panel auth-box" style="width: 450px;">
-            <h2><i class="fas fa-trophy"></i> Match Over - Global Leaderboard</h2>
-            <p id="match-result-summary" style="color: #00e5ff; font-weight: bold; margin: 10px 0;"></p>
+            <h2><i class="fas fa-trophy" style="color: #ca8a04;"></i> Match Over - Leaderboard</h2>
+            <p id="match-result-summary" style="color: #0284c7; font-weight: bold; margin: 10px 0;"></p>
             <ul id="leaderboard-list" style="list-style: none; font-size: 0.85rem; max-height: 200px; overflow-y: auto; margin-bottom: 15px; text-align: left;"></ul>
             <button id="back-to-setup-btn" class="btn-primary" style="width: 100%;">Return to Match Setup</button>
         </div>
@@ -158,11 +160,11 @@
         <div class="glass-panel auth-box" style="width: 450px;">
             <h2><i class="fas fa-history"></i> Match Replay Viewer</h2>
             <div id="replay-board" class="board" style="margin: 15px auto; --grid-size: 3;"></div>
-            <p id="replay-status" style="color: #00e5ff; font-weight: bold; margin-bottom: 15px;">Step 0 / 0</p>
+            <p id="replay-status" style="color: #0284c7; font-weight: bold; margin-bottom: 15px;">Step 0 / 0</p>
             <div class="controls" style="display: flex; gap: 10px;">
                 <button id="replay-prev" class="btn-secondary"><i class="fas fa-step-backward"></i> Prev</button>
                 <button id="replay-next" class="btn-primary"><i class="fas fa-step-forward"></i> Next</button>
-                <button id="replay-close" class="btn-secondary" style="border: 1px solid #ff0055; color: #ff0055;">Close</button>
+                <button id="replay-close" class="btn-secondary" style="border: 1px solid #e11d48; color: #e11d48;">Close</button>
             </div>
         </div>
     </div>

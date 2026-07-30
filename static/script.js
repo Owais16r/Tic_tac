@@ -1,6 +1,5 @@
 const BACKEND_URL = window.location.origin;
 const socket = io();
-
 const symbols = ["X", "O", "△", "□", "★", "♥"];
 let board = [];
 let currentPlayerIndex = 0;
@@ -137,15 +136,40 @@ winLengthSelect.addEventListener('change', () => {
     rulesBox.innerHTML = `<strong>Rules to Win:</strong> Align ${WIN} consecutive matching symbols on the ${BOARD_SIZE}x${BOARD_SIZE} grid.`;
 });
 
-async function handleAuth(endpoint) {
+async function handleRegister() {
     const username = authUsernameInput.value.trim();
     const password = authPasswordInput.value.trim();
     if (!username || !password || username.length < 3 || password.length < 6) {
         authStatus.innerText = "Error: Username ≥ 3 chars, Password ≥ 6 chars.";
-        authStatus.style.color = "#ff0055"; return;
+        authStatus.style.color = "#e11d48"; return;
     }
     try {
-        const response = await fetch(`${BACKEND_URL}/${endpoint}`, {
+        const response = await fetch(`${BACKEND_URL}/register`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+            authStatus.innerText = "Registration successful! Now click Login.";
+            authStatus.style.color = "#16a34a";
+        } else {
+            authStatus.innerText = data.message || "Registration failed.";
+            authStatus.style.color = "#e11d48";
+        }
+    } catch (e) {
+        authStatus.innerText = "Server offline."; authStatus.style.color = "#e11d48";
+    }
+}
+
+async function handleLogin() {
+    const username = authUsernameInput.value.trim();
+    const password = authPasswordInput.value.trim();
+    if (!username || !password) {
+        authStatus.innerText = "Please enter your username and password.";
+        authStatus.style.color = "#e11d48"; return;
+    }
+    try {
+        const response = await fetch(`${BACKEND_URL}/login`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
@@ -157,16 +181,16 @@ async function handleAuth(endpoint) {
             switchWindow(winSetup);
             fetchMatchHistory();
         } else {
-            authStatus.innerText = data.message || "Authentication failed.";
-            authStatus.style.color = "#ff0055";
+            authStatus.innerText = data.message || "Invalid username or password.";
+            authStatus.style.color = "#e11d48";
         }
     } catch (e) {
-        authStatus.innerText = "Server offline."; authStatus.style.color = "#ff0055";
+        authStatus.innerText = "Server offline."; authStatus.style.color = "#e11d48";
     }
 }
 
-loginBtn.addEventListener('click', () => handleAuth('login'));
-registerBtn.addEventListener('click', () => handleAuth('register'));
+registerBtn.addEventListener('click', handleRegister);
+loginBtn.addEventListener('click', handleLogin);
 
 createRoomBtn.addEventListener('click', () => {
     roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -174,7 +198,6 @@ createRoomBtn.addEventListener('click', () => {
     socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
     roomDisplay.innerText = `Room Created! Code: ${roomCode}`;
     roomDisplay.classList.remove('hidden');
-    startOnlineMatch();
 });
 
 joinRoomBtn.addEventListener('click', () => {
@@ -182,9 +205,8 @@ joinRoomBtn.addEventListener('click', () => {
     if (code) {
         roomCode = code; gameMode = 'online'; isSpectator = false; myPlayerIndex = 1;
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
-        roomDisplay.innerText = `Joined Arena: ${roomCode}`;
+        roomDisplay.innerText = `Joined Arena: ${code}`;
         roomDisplay.classList.remove('hidden');
-        startOnlineMatch();
     } else { alert("Enter room code."); }
 });
 
@@ -193,47 +215,32 @@ spectateBtn.addEventListener('click', () => {
     if (code) {
         roomCode = code; gameMode = 'online'; isSpectator = true; myPlayerIndex = -1;
         socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: true });
-        roomDisplay.innerText = `Spectating Room: ${roomCode}`;
+        roomDisplay.innerText = `Spectating Room: ${code}`;
         roomDisplay.classList.remove('hidden');
-        startOnlineMatch();
     } else { alert("Enter room code to spectate."); }
 });
 
-function startOnlineMatch() {
-    BOARD_SIZE = 3; WIN = 3; playerCount = 2;
-    switchWindow(winGame);
-    boardElement.style.setProperty('--grid-size', BOARD_SIZE);
-    boardElement.innerHTML = '';
-    
-    board = Array(BOARD_SIZE * BOARD_SIZE).fill(' ');
-    currentPlayerIndex = 0; gameActive = true; gamePaused = false; moveHistoryLog = []; heatmapActive = false;
-    
-    renderParticipantsSidebar();
-    statusMessage.innerText = `Online Match Live! Player 1 (X) turn.`;
-    updateWinProbability();
-
-    for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
-        const cell = document.createElement('div');
-        cell.classList.add('cell');
-        cell.dataset.index = i;
-        cell.addEventListener('click', () => handleCellClick(i, cell));
-        boardElement.appendChild(cell);
-    }
-    startTimer();
-}
-
 startMatchBtn.addEventListener('click', () => {
     gameMode = gameModeSelect.value;
-    if (gameMode === 'online') {
-        alert("Please use 'Create Room' or 'Join' for online multiplayer mode.");
-        return;
-    }
     playerCount = parseInt(playerCountSelect.value);
     if (gameMode === 'ai') { playerCount = 2; BOARD_SIZE = 3; WIN = 3; }
     else if (playerCount === 2) { BOARD_SIZE = 3; WIN = 3; }
     else if (playerCount <= 4) { BOARD_SIZE = 5; WIN = parseInt(winLengthSelect.value) || 4; }
     else { BOARD_SIZE = 7; WIN = parseInt(winLengthSelect.value) || 5; }
 
+    if (gameMode === 'online') {
+        if (!roomCode) {
+            roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+            myPlayerIndex = 0;
+        }
+        socket.emit('join_room', { room: roomCode, username: currentUser || 'Guest', spectator: false });
+        return;
+    }
+
+    initializeBoardAndSwitchWindow();
+});
+
+function initializeBoardAndSwitchWindow() {
     switchWindow(winGame);
     boardElement.style.setProperty('--grid-size', BOARD_SIZE);
     boardElement.innerHTML = '';
@@ -255,7 +262,7 @@ startMatchBtn.addEventListener('click', () => {
         boardElement.appendChild(cell);
     }
     startTimer();
-});
+}
 
 function renderParticipantsSidebar() {
     participantsList.innerHTML = '';
@@ -263,8 +270,8 @@ function renderParticipantsSidebar() {
     for (let i = 0; i < playerCount; i++) {
         const div = document.createElement('div');
         div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
-        div.style.background = 'rgba(0,0,0,0.3)'; div.style.padding = '6px 10px'; div.style.borderRadius = '6px';
-        div.innerHTML = `<span><i class="fas fa-user"></i> Player ${i+1}</span> <strong style="color: ${['#00e5ff','#ff0055','#00ff00','#ffaa00'][i%4]};">${players[i]}</strong>`;
+        div.style.background = 'rgba(0,0,0,0.03)'; div.style.padding = '6px 10px'; div.style.borderRadius = '6px';
+        div.innerHTML = `<span><i class="fas fa-user"></i> Player ${i+1}</span> <strong style="color: ${['#0284c7','#e11d48','#16a34a','#d97706'][i%4]};">${players[i]}</strong>`;
         participantsList.appendChild(div);
     }
 }
@@ -286,6 +293,7 @@ pauseResumeBtn.addEventListener('click', () => {
 endMatchBtn.addEventListener('click', () => {
     gameActive = false; gamePaused = false; clearInterval(turnTimer);
     switchWindow(winSetup);
+    fetchMatchHistory();
 });
 
 backToSetupBtn.addEventListener('click', () => {
@@ -342,13 +350,14 @@ async function handleCellClick(index, cellElement) {
 
 function makeMoveLocally(index, symbol, cellElement) {
     board[index] = symbol;
-    cellElement.innerText = symbol;
-    cellElement.classList.add('taken');
-    cellElement.style.boxShadow = 'none';
+    if (cellElement) {
+        cellElement.innerText = symbol;
+        cellElement.classList.add('taken');
+        cellElement.style.boxShadow = 'none';
+        const colors = ['#0284c7', '#e11d48', '#16a34a', '#d97706', '#9333ea', '#db2777'];
+        cellElement.style.color = colors[symbols.indexOf(symbol) % colors.length];
+    }
     playSound('move');
-    
-    const colors = ['#00e5ff', '#ff0055', '#00ff00', '#ffaa00', '#aa00ff', '#ff00ff'];
-    cellElement.style.color = colors[symbols.indexOf(symbol) % colors.length];
 
     updateWinProbability();
 
@@ -417,9 +426,9 @@ getHintBtn.addEventListener('click', async () => {
 
     const cell = document.querySelector(`.cell[data-index='${targetedMove}']`);
     if (cell) {
-        cell.style.boxShadow = '0 0 20px #00ff00';
+        cell.style.boxShadow = '0 0 15px #16a34a';
         setTimeout(() => { cell.style.boxShadow = 'none'; }, 2500);
-        statusMessage.innerText = `AI Coach Hint: Recommended optimal strategic position highlighted in green!`;
+        statusMessage.innerText = `AI Coach Hint: Optimal position highlighted!`;
     }
 });
 
@@ -427,11 +436,11 @@ heatmapBtn.addEventListener('click', async () => {
     if (!gameActive || gamePaused) return;
     heatmapActive = !heatmapActive;
     if (heatmapActive) {
-        heatmapBtn.style.background = '#00e5ff'; heatmapBtn.style.color = '#0f111a';
+        heatmapBtn.style.background = '#0284c7'; heatmapBtn.style.color = '#ffffff';
         await renderHeatmapUI();
     } else {
-        heatmapBtn.style.background = 'rgba(255, 255, 255, 0.08)'; heatmapBtn.style.color = 'white';
-        document.querySelectorAll('.cell').forEach(c => c.style.background = 'rgba(0, 0, 0, 0.6)');
+        heatmapBtn.style.background = '#ffffff'; heatmapBtn.style.color = '#334155';
+        document.querySelectorAll('.cell').forEach(c => c.style.background = '#ffffff');
     }
 });
 
@@ -443,7 +452,7 @@ async function renderHeatmapUI() {
             data.heatmap.forEach((val, idx) => {
                 const cell = document.querySelector(`.cell[data-index='${idx}']`);
                 if (cell && board[idx] === ' ') {
-                    cell.style.background = `rgba(252, 163, 17, ${Math.min(0.7, Math.max(0.1, val))})`;
+                    cell.style.background = `rgba(2, 132, 199, ${Math.min(0.5, Math.max(0.1, val))})`;
                 }
             });
         }
@@ -451,9 +460,12 @@ async function renderHeatmapUI() {
 }
 
 function saveMatchAndShowLeaderboard(winner) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
     fetch(`${BACKEND_URL}/save_match`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+        headers: headers,
         body: JSON.stringify({ size: BOARD_SIZE, players: playerCount, winner: winner, move_log: moveHistoryLog })
     }).then(() => {
         matchResultSummary.innerText = `Result: ${winner}`;
@@ -472,7 +484,7 @@ async function fetchLeaderboardModal() {
             data.forEach((user, idx) => {
                 const li = document.createElement('li');
                 li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.padding = '4px 0';
-                li.innerHTML = `<span>#${idx+1} ${user.username}</span> <strong style="color: #00e5ff;">${user.elo} ELO</strong>`;
+                li.innerHTML = `<span>#${idx+1} ${user.username}</span> <strong style="color: #0284c7;">${user.elo} ELO</strong>`;
                 list.appendChild(li);
             });
         }
@@ -526,6 +538,7 @@ async function processAIMove() {
         const data = await res.json();
         if (data.move !== undefined && board[data.move] === ' ') move = data.move;
     } catch(e) {}
+    
     setTimeout(() => {
         if (!gameActive || gamePaused) return;
         moveHistoryLog.push({ index: move, symbol: symbols[1], boardState: [...board] });
@@ -535,15 +548,16 @@ async function processAIMove() {
 }
 
 socket.on('room_notification', (data) => {
+    statusMessage.innerText = data.message;
     const div = document.createElement('div');
-    div.innerHTML = `<span style="color: #fca311;">SYSTEM:</span> ${data.message}`;
+    div.innerHTML = `<span style="color: #0284c7;">SYSTEM:</span> ${data.message}`;
     chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
 });
 
 socket.on('sync_state', (state) => {
     if (state && state.board) {
         board = state.board;
-        currentPlayerIndex = state.turn !== undefined ? state.turn : 0;
+        currentPlayerIndex = state.turn || 0;
         BOARD_SIZE = state.size || 3;
         playerCount = state.players || 2;
         gameActive = true; gamePaused = false;
@@ -567,44 +581,34 @@ socket.on('sync_state', (state) => {
 });
 
 socket.on('receive_move', (data) => {
-    if (data && data.board) {
-        board = data.board;
-        currentPlayerIndex = data.turnIndex !== undefined ? data.turnIndex : 0;
-        
-        boardElement.innerHTML = '';
-        boardElement.style.setProperty('--grid-size', BOARD_SIZE);
-        for (let i = 0; i < (BOARD_SIZE * BOARD_SIZE); i++) {
-            const cell = document.createElement('div');
-            cell.classList.add('cell');
-            cell.dataset.index = i;
-            cell.innerText = board[i] || ' ';
-            if (board[i] && board[i] !== ' ') {
-                cell.classList.add('taken');
-                const colors = ['#00e5ff', '#ff0055', '#00ff00', '#ffaa00', '#aa00ff', '#ff00ff'];
-                cell.style.color = colors[symbols.indexOf(board[i]) % colors.length];
-            }
-            cell.addEventListener('click', () => handleCellClick(i, cell));
-            boardElement.appendChild(cell);
-        }
-        
-        playSound('move');
-        updateWinProbability();
-
-        if (check_win(data.symbol)) {
-            clearInterval(turnTimer); timerDisplay.classList.add('hidden');
-            statusMessage.innerText = `Player (${data.symbol}) Wins!`;
-            gameActive = false; playSound('win');
-            return;
-        }
-
-        statusMessage.innerText = `Player ${currentPlayerIndex + 1} turn.`;
-        startTimer();
+    board = data.board;
+    currentPlayerIndex = data.turnIndex;
+    
+    const cell = document.querySelector(`.cell[data-index='${data.index}']`);
+    if (cell) {
+        cell.innerText = data.symbol;
+        cell.classList.add('taken');
+        const colors = ['#0284c7', '#e11d48', '#16a34a', '#d97706', '#9333ea', '#db2777'];
+        cell.style.color = colors[symbols.indexOf(data.symbol) % colors.length];
     }
+    playSound('move');
+    updateWinProbability();
+
+    if (check_win(data.symbol)) {
+        clearInterval(turnTimer); timerDisplay.classList.add('hidden');
+        statusMessage.innerText = `Player (${data.symbol}) Wins!`;
+        gameActive = false; playSound('win');
+        return;
+    }
+
+    currentPlayerIndex = (currentPlayerIndex + 1) % playerCount;
+    statusMessage.innerText = `Player ${currentPlayerIndex + 1} turn.`;
+    startTimer();
 });
 
 socket.on('receive_chat', (data) => {
     const div = document.createElement('div');
-    div.innerHTML = `<span style="color: #00e5ff;">${data.username}:</span> ${data.msg}`;
+    div.innerHTML = `<span style="color: #0284c7;">${data.username}:</span> ${data.msg}`;
     chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
 });
 
@@ -660,22 +664,43 @@ function openReplayModal(logs, size) {
     currentReplayLogs = logs; replayStepIndex = 0; BOARD_SIZE = size;
     replayModal.classList.remove('hidden'); renderReplayStep();
 }
+
 function renderReplayStep() {
     replayBoard.style.setProperty('--grid-size', BOARD_SIZE);
     replayBoard.innerHTML = '';
     let displayBoard = Array(BOARD_SIZE * BOARD_SIZE).fill(' ');
-    if (replayStepIndex > 0 && currentReplayLogs.length > 0) {
-        const targetLog = currentReplayLogs[replayStepIndex - 1];
-        if (targetLog && targetLog.boardState) {
-            displayBoard = [...targetLog.boardState]; displayBoard[targetLog.index] = targetLog.symbol;
+    
+    for (let s = 0; s < replayStepIndex; s++) {
+        const log = currentReplayLogs[s];
+        if (log && log.index !== undefined && log.symbol) {
+            displayBoard[log.index] = log.symbol;
         }
     }
+
     for (let i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
-        const cell = document.createElement('div'); cell.classList.add('cell'); cell.innerText = displayBoard[i];
+        const cell = document.createElement('div'); 
+        cell.classList.add('cell'); 
+        cell.innerText = displayBoard[i];
+        if (displayBoard[i] !== ' ') cell.classList.add('taken');
         replayBoard.appendChild(cell);
     }
     replayStatus.innerText = `Step ${replayStepIndex} / ${currentReplayLogs.length}`;
 }
-replayNext.addEventListener('click', () => { if (replayStepIndex < currentReplayLogs.length) { replayStepIndex++; renderReplayStep(); } });
-replayPrev.addEventListener('click', () => { if (replayStepIndex > 0) { replayStepIndex--; renderReplayStep(); } });
-replayClose.addEventListener('click', () => { replayModal.classList.add('hidden'); });
+
+replayNext.addEventListener('click', () => { 
+    if (replayStepIndex < currentReplayLogs.length) { 
+        replayStepIndex++; 
+        renderReplayStep(); 
+    } 
+});
+
+replayPrev.addEventListener('click', () => { 
+    if (replayStepIndex > 0) { 
+        replayStepIndex--; 
+        renderReplayStep(); 
+    } 
+});
+
+replayClose.addEventListener('click', () => { 
+    replayModal.classList.add('hidden'); 
+});
